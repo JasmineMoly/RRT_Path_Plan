@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
 import numpy as np
 import time
+import matplotlib.animation as animation
 
 
 class Node:
@@ -9,6 +10,29 @@ class Node:
         self.point = np.array(point)
         self.parent = None
         self.cost = 0
+
+
+def bezier(final_path):
+    x = final_path[:, 0]
+    y = final_path[:, 1]
+    z = final_path[:, 2]
+    cs_x = CubicSpline(range(len(x)), x)
+    cs_y = CubicSpline(range(len(y)), y)
+    cs_z = CubicSpline(range(len(z)), z)
+    t = np.linspace(0, len(x) - 1, 1000)
+    x_new = cs_x(t)
+    y_new = cs_y(t)
+    z_new = cs_z(t)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(x, y, z, c='b', marker='o', label='Original points')
+    ax.plot(x, y, z, c='y', label='Original path')
+    ax.plot(x_new, y_new, z_new, label='Interpolated points', color='r')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    plt.legend(loc='best')
+    plt.show()
 
 
 class RRTStar3D:
@@ -26,6 +50,8 @@ class RRTStar3D:
         self.node_list = []
         self.step_size_history = []  # 记录步长变化的历史列表
         self.distance_history = []  # 记录距离目标的历史列表
+        self.new_node_points = []  # 记录所有探索到的点
+
         # 设置max_distance和min_distance的比例参数
         self.min_distance = 0
         self.max_distance = 0
@@ -71,15 +97,17 @@ class RRTStar3D:
             if distance < obstacle_radius + self.safe_distance:
                 return False
         return True
+
+    # 检测最终路径是否与障碍物发生碰撞
     def test(self):
         from_node = self.goal
         to_node = from_node.parent
         print("Testing path:")
         while to_node is not None:
-            print("from:", from_node.point, ",to:", to_node.point, ",collision free:", self.collision_detect(from_node.point, to_node.point))
+            print("from:", from_node.point, ",to:", to_node.point, ",collision free:",
+                  self.collision_detect(from_node.point, to_node.point))
             from_node = to_node
             to_node = to_node.parent
-
 
     def steer(self, from_node, to_node):
         # 从一个节点向另一个节点延伸一步
@@ -93,6 +121,7 @@ class RRTStar3D:
         if self.collision_detect(from_node.point, new_node_point):
             new_node = Node(new_node_point)
             new_node.parent = from_node
+            self.new_node_points.append(new_node_point)  # 保存新节点
             return new_node
         else:
             return False
@@ -189,9 +218,10 @@ class RRTStar3D:
                     self.goal.parent = new_node
                     self.goal.cost = new_node.cost + distance_to_goal
                     end_time = time.time()
-                    self.test()
+                    # self.test()
                     print("Time taken:", end_time - start_time, "seconds, Total cost:", self.goal.cost)
-                    final_path = self.trace_path()
+                    print("Number of new nodes:", len(self.new_node_points))
+                    final_path = self.trace_path()  # 追踪路径
                     return final_path
         return None
 
@@ -212,7 +242,27 @@ class RRTStar3D:
             y = obstacle[0][1] + obstacle[1] * np.outer(np.sin(u), np.sin(v))
             z = obstacle[0][2] + obstacle[1] * np.outer(np.ones(np.size(u)), np.cos(v))
             ax.plot_surface(x, y, z, rstride=4, cstride=4, color='y', linewidth=0, alpha=0.5)
+        # 绘制最终路径
         ax.plot(final_path[:, 0], final_path[:, 1], final_path[:, 2], c='blue', label='Path')
+        # new_node_points_array = np.array(self.new_node_points)
+        # ax.scatter(new_node_points_array[:, 0], new_node_points_array[:, 1], new_node_points_array[:, 2], c='orange', marker='.', label='Explored Node')
+
+        # 初始化新节点点的散点图
+        scatter = ax.scatter([], [], [], c='orange', marker='.', label='Explored node')
+
+        # 更新函数，用于更新散点图的位置
+        def update(frame):
+            if frame < len(self.new_node_points):
+                point = self.new_node_points[frame]
+                scatter._offsets3d = (np.append(scatter._offsets3d[0], point[0]),
+                                      np.append(scatter._offsets3d[1], point[1]),
+                                      np.append(scatter._offsets3d[2], point[2]))
+                plt.draw()
+            return scatter,
+
+        # 使用一点延迟在动画中显示每个点
+        ani = animation.FuncAnimation(fig, update, frames=len(self.new_node_points), interval=50)
+
         ax.set_xlim(self.min_rand, self.max_rand)
         ax.set_ylim(self.min_rand, self.max_rand)
         ax.set_zlim(self.min_rand, self.max_rand)
@@ -220,28 +270,6 @@ class RRTStar3D:
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
         ax.legend()
-        plt.show()
-
-    def bezier(self, final_path):
-        x = final_path[:, 0]
-        y = final_path[:, 1]
-        z = final_path[:, 2]
-        cs_x = CubicSpline(range(len(x)), x)
-        cs_y = CubicSpline(range(len(y)), y)
-        cs_z = CubicSpline(range(len(z)), z)
-        t = np.linspace(0, len(x) - 1, 1000)
-        x_new = cs_x(t)
-        y_new = cs_y(t)
-        z_new = cs_z(t)
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(x, y, z, c='b', marker='o', label='Original points')
-        ax.plot(x, y, z, c='y', label='Original path')
-        ax.plot(x_new, y_new, z_new, label='Interpolated points', color='r')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        plt.legend(loc='best')
         plt.show()
 
     def plot_step_size_history(self):
@@ -262,8 +290,10 @@ class RRTStar3D:
 if __name__ == '__main__':
     start = [1, 1, 1]
     goal = [13, 13, 13]
-    obstacle_list = [([6, 6, 6], 1.5), ([9, 10, 9], 1.5), ([10, 6, 10], 1.5), ([8, 6, 8], 1), ([6, 10, 6], 1.5)]
-    rrt_star = RRTStar3D(start, goal, obstacle_list, rand_area=[0, 15], step_size=0.5, max_iter=500, search_radius=3.8, safe_distance=0.3)
+    obstacle_list = [([6, 6, 6], 1.5), ([9, 10, 9], 1.5), ([10, 6, 10], 1.5), ([8, 6, 8], 1), ([6, 10, 6], 1.5),
+                     ([12.5, 12.5, 12.5], 0.5)]
+    rrt_star = RRTStar3D(start, goal, obstacle_list, rand_area=[0, 15], step_size=0.5, max_iter=1000, search_radius=3.8,
+                         safe_distance=0.3)
     path = rrt_star.plan()
     print("大于max_distance", rrt_star.a)
     print("小于min_distance", rrt_star.b)
@@ -273,6 +303,6 @@ if __name__ == '__main__':
     else:
         print("Found!")
         rrt_star.draw_path(path)
-        rrt_star.bezier(path)
+        bezier(path)
         rrt_star.plot_step_size_history()
         rrt_star.plot_distance_history()
