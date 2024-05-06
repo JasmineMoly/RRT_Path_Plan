@@ -52,7 +52,7 @@ def collision_free(point1, point2, obstacle_list):
 
 
 # 测试示例
-p1 = np.array([2.52377418, 3.1902712,  2.8873132])
-p2 = np.array([1, 1, 1])
+p1 = np.array([10.3325219, 10.37560086,  10.50058212])
+p2 = np.array([9.85731, 9.90652773, 10.1590502])
 obstacle_list = [([6, 6, 6], 1.5), ([9, 10, 9], 1.5), ([10, 6, 10], 1.5), ([8, 6, 8], 1), ([6, 10, 6], 1.5)]
 print(collision_free(p1, p2, obstacle_list))

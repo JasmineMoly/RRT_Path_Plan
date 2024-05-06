@@ -249,7 +249,11 @@ class RRTStar3D:
 
         # 初始化新节点点的散点图
         scatter = ax.scatter([], [], [], c='orange', marker='.', label='Explored node')
-
+        # 绘制 tree
+        for node in self.node_list:
+            if node.parent is not None:
+                ax.plot([node.point[0], node.parent.point[0]], [node.point[1], node.parent.point[1]],
+                        [node.point[2], node.parent.point[2]], color='darkred')
         # 更新函数，用于更新散点图的位置
         def update(frame):
             if frame < len(self.node_list):

@@ -34,7 +34,7 @@ class RRTConnect:
         return tree[np.argmin(distances)]
 
     def steer(self, from_node, to_node):
-        # print('\033[92m' + "steer:")
+        print('\033[92m' + "steer:")
         # 从一个节点向另一个节点延伸一步
         direction = np.array(to_node.point) - np.array(from_node.point)
         distance = np.linalg.norm(direction)
@@ -51,10 +51,10 @@ class RRTConnect:
             return False
 
     def keep_steer(self, from_node, to_node):
-        # print('\033[94m' + "keep_steer:")
+        print('\033[94m' + "keep_steer:")
         # 从一个节点向另一个节点延伸一步
         direction = np.array(to_node.point) - np.array(from_node.point)
-        # print("direction", direction, "from_node", from_node.point, "to_node",  to_node.point)
+        print("direction", direction, "from_node", from_node.point, "to_node",  to_node.point)
         distance = np.linalg.norm(direction)
         unit_direction = direction / distance
         if distance <= self.step_size:
@@ -68,14 +68,14 @@ class RRTConnect:
             # 如果距离小于步长，直接返回
             if np.linalg.norm(np.array(new_node_point) - np.array(to_node.point)) <= self.step_size:
                 new_node_point += self.step_size * unit_direction
-                # print("距离小于步长，直接返回")
+                print("距离小于步长，直接返回")
                 break
             new_node_point += self.step_size * unit_direction
-            # print("temp_node_point:", new_node_point)
+            print("temp_node_point:", new_node_point)
         if i == 0:
             return False
         new_node_point -= self.step_size * unit_direction
-        # print("new_node_point:", new_node_point)
+        print("new_node_point:", new_node_point)
         new_node = Node(new_node_point)
         new_node.parent = from_node
         return new_node
@@ -95,9 +95,9 @@ class RRTConnect:
             else:  # 垂足不在线段上
                 distance = min(np.linalg.norm(link2), np.linalg.norm(link3))
             if distance < obstacle_radius + self.safe_distance:
-                # print("collision_detect point1:", point1, "point2:", point2, "False")
+                print("collision_detect point1:", point1, "point2:", point2, "False")
                 return False
-        # print("collision_detect point1:", point1, "point2:", point2, "True")
+        print("collision_detect point1:", point1, "point2:", point2, "True")
         return True
 
     def plan(self):
