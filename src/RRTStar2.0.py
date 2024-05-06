@@ -1,3 +1,5 @@
+import math
+
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
 import numpy as np
@@ -5,6 +7,7 @@ import time
 import matplotlib.animation as animation
 
 
+# 节点类
 class Node:
     def __init__(self, point):
         self.point = np.array(point)
@@ -12,6 +15,7 @@ class Node:
         self.cost = 0
 
 
+# 贝塞尔曲线优化
 def bezier(final_path):
     x = final_path[:, 0]
     y = final_path[:, 1]
@@ -43,34 +47,15 @@ class RRTStar3D:
         self.min_rand = rand_area[0]  # 随机生成点的范围最小值
         self.max_rand = rand_area[1]  # 随机生成点的范围最大值
         self.origin_step_size = step_size
-        self.step_size = step_size  # 步长
+        self.init_step_size = step_size  # 初始步长
+        self.step_size = 0
         self.max_iter = max_iter  # 最大迭代次数
         self.search_radius = search_radius  # 搜索半径
         self.safe_distance = safe_distance  # 安全距离
-        self.node_list = []
+        self.node_list = []  # 记录所有探索到的点
         self.step_size_history = []  # 记录步长变化的历史列表
         self.distance_history = []  # 记录距离目标的历史列表
-        self.new_node_points = []  # 记录所有探索到的点
-
-        # 设置max_distance和min_distance的比例参数
-        self.min_distance = 0
-        self.max_distance = 0
-        self.max_distance_ratio = 0.7  # max_distance的比例系数
-        self.min_distance_ratio = 1.5  # min_distance的比例系数
-        self.a = 0
-        self.b = 0
-        self.c = 0
-        # 计算max_distance和min_distance
-        self.compute_distances()
-
-    def compute_distances(self):
-        # 计算规划空间对角线长度
-        diag_length = np.linalg.norm(np.array(self.goal.point) - np.array(self.start.point))
-
-        # 计算max_distance和min_distance
-        self.max_distance = self.max_distance_ratio * diag_length
-        self.min_distance = self.min_distance_ratio * self.step_size
-        print("max_distance:", self.max_distance, "min_distance:", self.min_distance)
+        self.distance_to_goal = 999  # 记录当前点到目标点的距离
 
     def generate_random_point(self):
         # 在随机生成点的范围内生成随机点
@@ -109,19 +94,54 @@ class RRTStar3D:
             from_node = to_node
             to_node = to_node.parent
 
-    def steer(self, from_node, to_node):
-        # 从一个节点向另一个节点延伸一步
-        direction = np.array(to_node.point) - np.array(from_node.point)
-        distance = np.linalg.norm(direction)
-        if distance <= self.step_size:
-            new_node_point = to_node.point
+    # 根据当前探索方向动态调整步长
+    def adjust_step_size(self, from_node, to_node):
+
+        # 计算两个向量
+        vec1 = np.array(to_node.point) - np.array(from_node.point)
+        vec2 = np.array(self.goal.point) - np.array(from_node.point)
+        # 计算两个向量的点积
+        dot_product = np.dot(vec1, vec2)
+        # 计算两个向量的模
+        norm_vec1 = np.linalg.norm(vec1)
+        norm_vec2 = np.linalg.norm(vec2)
+        # 计算夹角（弧度）
+        cos_theta = dot_product / (norm_vec1 * norm_vec2)
+        # 浮点数计算错误检测
+        # if cos_theta < -1 or cos_theta > 1:
+        #     print("Cos theta error")
+        #     print("cos_theta:", cos_theta)
+        #     print("vec1, vec2:", vec1, vec2)
+        #     print(norm_vec1, norm_vec2)
+        #     print(to_node.point)
+        #     print(from_node.point)
+        #     print(self.goal.point)
+        theta_radians = np.arccos(np.clip(cos_theta, -1.0, 1.0))
+        # 将弧度转换为角度
+        theta_degrees = np.degrees(theta_radians)
+        # 调整步长
+        if theta_degrees < 90:
+            self.step_size = self.init_step_size * (1 + dot_product / (norm_vec1 * norm_vec2))
         else:
-            unit_direction = direction / distance
-            new_node_point = from_node.point + self.step_size * unit_direction
+            self.step_size = self.init_step_size
+        self.step_size_history.append(self.step_size)
+        # print("cos:", dot_product / (norm_vec1 * norm_vec2))
+
+        return vec1, norm_vec1
+
+    def steer(self, from_node, to_node):
+        # 调整步长
+        direction, distance = self.adjust_step_size(from_node, to_node)
+        unit_direction = direction / distance
+        new_node_point = from_node.point + self.step_size * unit_direction
+        # 两节点间碰撞检测
         if self.collision_detect(from_node.point, new_node_point):
             new_node = Node(new_node_point)
             new_node.parent = from_node
-            self.new_node_points.append(new_node_point)  # 保存新节点
+            # 记录距离历史
+            self.distance_to_goal = np.linalg.norm(new_node.point - self.goal.point)
+            self.distance_history.append(self.distance_to_goal)
+
             return new_node
         else:
             return False
@@ -171,23 +191,6 @@ class RRTStar3D:
             current_node = current_node.parent
         return np.array(final_path[::-1])
 
-    def adjust_step_size(self, new_node):
-        # 根据距离目标的距离动态调整步长
-        distance_to_goal = np.linalg.norm(new_node.point - self.goal.point)
-        self.distance_history.append(distance_to_goal)  # 记录距离历史
-        if distance_to_goal > self.max_distance:
-            self.step_size = self.origin_step_size
-            self.a += 1
-        elif distance_to_goal < self.min_distance:
-            self.step_size = self.origin_step_size * 0.2
-            self.b += 1
-        else:
-            k = 0.8 * self.origin_step_size / (self.max_distance - self.min_distance)
-            b = self.origin_step_size - k * self.max_distance
-            self.step_size = k * distance_to_goal + b
-            self.c += 1
-        return distance_to_goal
-
     def plan(self):
         start_time = time.time()
         self.node_list.append(self.start)
@@ -199,28 +202,27 @@ class RRTStar3D:
                 random_point = self.generate_random_point()
             nearest_node_idx = self.nearest_node(random_point)
             nearest_node = self.node_list[nearest_node_idx]
-            # 连接节点
+            # 连接节点（过程中需要动态调整步长）
             new_node = self.steer(nearest_node, Node(random_point))
             if not new_node:
                 continue
             # 重新选择父节点
             near_nodes_idx = self.near_nodes(new_node)
             self.choose_parent(new_node, near_nodes_idx)
+            # 添加新节点
             self.node_list.append(new_node)
             # 重布线
             self.rewire(new_node, near_nodes_idx)
-            # 动态调整步长
-            distance_to_goal = self.adjust_step_size(new_node)
-            self.step_size_history.append(self.step_size)  # 记录步长变化历史
+
             # 判断是否接近终点
-            if distance_to_goal < self.min_distance:
+            if self.distance_to_goal < self.step_size:
                 if self.collision_detect(new_node.point, self.goal.point):
                     self.goal.parent = new_node
-                    self.goal.cost = new_node.cost + distance_to_goal
+                    self.goal.cost = new_node.cost + self.distance_to_goal
                     end_time = time.time()
                     # self.test()
                     print("Time taken:", end_time - start_time, "seconds, Total cost:", self.goal.cost)
-                    print("Number of new nodes:", len(self.new_node_points))
+                    print("Number of new nodes:", len(self.node_list))
                     final_path = self.trace_path()  # 追踪路径
                     return final_path
         return None
@@ -244,16 +246,14 @@ class RRTStar3D:
             ax.plot_surface(x, y, z, rstride=4, cstride=4, color='y', linewidth=0, alpha=0.5)
         # 绘制最终路径
         ax.plot(final_path[:, 0], final_path[:, 1], final_path[:, 2], c='blue', label='Path')
-        # new_node_points_array = np.array(self.new_node_points)
-        # ax.scatter(new_node_points_array[:, 0], new_node_points_array[:, 1], new_node_points_array[:, 2], c='orange', marker='.', label='Explored Node')
 
         # 初始化新节点点的散点图
         scatter = ax.scatter([], [], [], c='orange', marker='.', label='Explored node')
 
         # 更新函数，用于更新散点图的位置
         def update(frame):
-            if frame < len(self.new_node_points):
-                point = self.new_node_points[frame]
+            if frame < len(self.node_list):
+                point = self.node_list[frame].point
                 scatter._offsets3d = (np.append(scatter._offsets3d[0], point[0]),
                                       np.append(scatter._offsets3d[1], point[1]),
                                       np.append(scatter._offsets3d[2], point[2]))
@@ -261,7 +261,7 @@ class RRTStar3D:
             return scatter,
 
         # 使用一点延迟在动画中显示每个点
-        ani = animation.FuncAnimation(fig, update, frames=len(self.new_node_points), interval=50)
+        ani = animation.FuncAnimation(fig, update, frames=len(self.node_list), interval=5)
 
         ax.set_xlim(self.min_rand, self.max_rand)
         ax.set_ylim(self.min_rand, self.max_rand)
@@ -294,9 +294,6 @@ if __name__ == '__main__':
     rrt_star = RRTStar3D(start, goal, obstacle_list, rand_area=[0, 15], step_size=0.5, max_iter=500, search_radius=3.5,
                          safe_distance=0.2)
     path = rrt_star.plan()
-    print("大于max_distance", rrt_star.a)
-    print("小于min_distance", rrt_star.b)
-    print("中间", rrt_star.c)
     if path is None:
         print("No valid path found!")
     else:
