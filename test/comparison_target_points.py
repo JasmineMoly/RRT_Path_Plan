@@ -86,15 +86,6 @@ class RRTStar3D:
                     near_node.parent = new_node
                     near_node.cost = new_cost
 
-    @staticmethod
-    def trace_path(goal_node, goal_point):
-        final_path = [goal_point]
-        current_node = goal_node
-        while current_node is not None:
-            final_path.append(current_node.point)
-            current_node = current_node.parent
-        return np.array(final_path[::-1])
-
     def plan(self, use_goal_point=True):
         start_time = time.time()
         self.node_list.append(self.start)
@@ -124,7 +115,6 @@ class RRTStar3D:
 
         end_time = time.time()
         time_taken = end_time - start_time
-        final_path = self.trace_path(goal_node, self.goal.point)
         return time_taken, True
 
 

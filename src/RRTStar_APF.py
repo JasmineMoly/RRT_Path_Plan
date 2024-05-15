@@ -39,7 +39,7 @@ def bezier(final_path):
 
 
 class RRTStar3D:
-    def __init__(self, st, gl, ot, rand_area, step_size, max_iter, search_radius, safe_distance):
+    def __init__(self, st, gl, ot, rand_area, step_size, max_iter, search_radius, safe_distance, k_att, k_rep):
         self.start = Node(st)  # 起始点
         self.goal = Node(gl)  # 目标点
         self.obstacle_list = ot  # 障碍物列表
@@ -51,10 +51,14 @@ class RRTStar3D:
         self.max_iter = max_iter  # 最大迭代次数
         self.search_radius = search_radius  # 搜索半径
         self.safe_distance = safe_distance  # 安全距离
+        self.k_att = k_att  # 引力系数
+        self.k_rep = k_rep  # 斥力系数
+
         self.node_list = []  # 记录所有探索到的点
         self.step_size_history = []  # 记录步长变化的历史列表
         self.distance_history = []  # 记录距离目标的历史列表
         self.distance_to_goal = 999  # 记录当前点到目标点的距离
+
         self.collision_num = 0  # 记录碰撞次数
 
     def generate_random_point(self):
@@ -96,7 +100,6 @@ class RRTStar3D:
 
     # 根据当前探索方向动态调整步长
     def adjust_step_size(self, from_node, to_node):
-
         # 计算两个向量
         vec1 = np.array(to_node.point) - np.array(from_node.point)
         vec2 = np.array(self.goal.point) - np.array(from_node.point)
@@ -126,10 +129,27 @@ class RRTStar3D:
             self.step_size = self.init_step_size
         self.step_size_history.append(self.step_size)
         # print("cos:", dot_product / (norm_vec1 * norm_vec2))
-
         return vec1, norm_vec1
 
+    def apf(self, from_node, to_node):
+        # 计算引力
+        att_force = self.k_att * (self.goal.point - from_node.point)
+        print("att_force:", att_force)
+        # 计算斥力
+        rep_force = np.zeros(3)
+        for obstacle in self.obstacle_list:
+            obstacle_center = np.array(obstacle[0])
+            direction = from_node.point - obstacle_center
+            direction_norm = np.linalg.norm(direction)
+            rep_force += self.k_rep * (1 / direction_norm ** 2) * direction
+        print("rep_force:", rep_force)
+        # 计算合力
+        total_force = att_force + rep_force
+        to_node.point += total_force.astype(np.int64)
+
     def steer(self, from_node, to_node):
+        # 根据引力和斥力调整to_node
+        self.apf(from_node, to_node)
         # 调整步长
         direction, distance = self.adjust_step_size(from_node, to_node)
         unit_direction = direction / distance
@@ -291,7 +311,7 @@ class RRTStar3D:
         # 绘制探索过的节点
         explored_nodes = np.array([node.point for node in self.node_list])
         ax.scatter(explored_nodes[:, 0], explored_nodes[:, 1], explored_nodes[:, 2], c='orange', marker='.',
-                    label='Explored node')
+                   label='Explored node')
         ax.set_xlim(self.min_rand, self.max_rand)
         ax.set_ylim(self.min_rand, self.max_rand)
         ax.set_zlim(self.min_rand, self.max_rand)
@@ -300,7 +320,6 @@ class RRTStar3D:
         ax.set_zlabel('Z')
         ax.legend()
         plt.show()
-
     def plot_step_size_history(self):
         plt.plot(range(len(self.step_size_history)), self.step_size_history)
         plt.xlabel('Iteration')
@@ -320,8 +339,8 @@ if __name__ == '__main__':
     start = [1, 1, 1]
     goal = [13, 13, 13]
     obstacle_list = [([6, 6, 6], 1.5), ([9, 10, 9], 1.5), ([10, 6, 10], 1.5), ([8, 6, 8], 1), ([6, 10, 6], 1.5), ([12, 12, 12], 0.5)]
-    rrt_star = RRTStar3D(start, goal, obstacle_list, rand_area=[0, 15], step_size=0.4, max_iter=700, search_radius=3.5,
-                         safe_distance=0.2)
+    rrt_star = RRTStar3D(start, goal, obstacle_list, rand_area=[0, 15], step_size=0.4, max_iter=1000, search_radius=3.5,
+                         safe_distance=0.2, k_att=0.3, k_rep=1.8)
     path = rrt_star.plan()
     if path is None:
         print("No valid path found!")

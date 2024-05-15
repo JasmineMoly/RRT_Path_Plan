@@ -257,8 +257,8 @@ class RRTConnect:
 if __name__ == '__main__':
     start = [1, 1, 1]
     goal = [13, 13, 13]
-    obstacle_list = [([6, 6, 6], 1.5), ([9, 10, 9], 1.5), ([10, 6, 10], 1.5), ([8, 6, 8], 1), ([6, 10, 6], 1.5)]
-    rrt_connect = RRTConnect(start, goal, obstacle_list, rand_area=[0, 15], step_size=0.75, max_iter=1000, safe_distance=0.2)
+    obstacle_list = [([6, 6, 6], 1.5), ([9, 10, 9], 1.5), ([10, 6, 10], 1.5), ([8, 6, 8], 1), ([6, 10, 6], 1.5), ([12, 12, 12], 0.5)]
+    rrt_connect = RRTConnect(start, goal, obstacle_list, rand_area=[0, 15], step_size=0.4, max_iter=1000, safe_distance=0.2)
     path_start, path_goal = rrt_connect.plan()
 
     if path_start is None or path_goal is None:
